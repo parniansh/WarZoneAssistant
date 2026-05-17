@@ -34,6 +34,39 @@ def init_db():
             error_message   TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS static_resources (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            osm_id          TEXT NOT NULL,  --OpenStreetMap ID to avoid duplicates
+            resource_type   TEXT NOT NULL,
+            name            TEXT,
+            country         TEXT,
+            region          TEXT,
+            latitude        REAL NOT NULL,
+            longitude       REAL NOT NULL,
+            address         TEXT,
+            phone           TEXT,
+            fetched_at      TEXT NOT NULL,
+            UNIQUE(osm_id, resource_type)
+        );
+
+        CREATE TABLE IF NOT EXISTS dynamic_resources (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            resource_id     TEXT NOT NULL,
+            source          TEXT NOT NULL,
+            resource_type   TEXT NOT NULL,
+            name            TEXT,
+            country         TEXT,
+            region          TEXT,
+            latitude        REAL NOT NULL,
+            longitude       REAL NOT NULL,
+            description     TEXT,
+            valid_from      TEXT,
+            valid_until     TEXT,
+            fetched_at      TEXT NOT NULL,
+            is_active       INTEGER DEFAULT 1,
+            UNIQUE(resource_id, source)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_conflict_location
             ON conflict_events (latitude, longitude);
 
@@ -42,6 +75,18 @@ def init_db():
 
         CREATE INDEX IF NOT EXISTS idx_conflict_country
             ON conflict_events (country);
+
+        CREATE INDEX IF NOT EXISTS idx_static_location
+            ON static_resources (latitude, longitude);
+
+        CREATE INDEX IF NOT EXISTS idx_static_country
+            ON static_resources (country, resource_type);
+
+        CREATE INDEX IF NOT EXISTS idx_dynamic_location
+            ON dynamic_resources (latitude, longitude);
+
+        CREATE INDEX IF NOT EXISTS idx_dynamic_active
+            ON dynamic_resources (is_active, country);
     """)
 
     conn.commit()
