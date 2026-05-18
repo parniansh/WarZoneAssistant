@@ -103,6 +103,32 @@ MOCK_EVENTS = [
         "severity": "high",
         "description": "Armed clashes reported in Rasht, Gilan. Multiple neighborhoods under curfew. Civilians advised to avoid the area.",
     },
+    # --- PATH CONFLICT TEST EVENTS ---
+    # Route: user (35.6892, 51.3890) -> ICRC Field Hospital (35.7601, 51.3456)
+    {
+        "event_id": "MOCK_IR_PATH_001",
+        "source": "ACLED",
+        "event_type": "Explosion/Remote violence",
+        "country": "Iran",
+        "region": "Tehran",
+        "latitude": 35.7246,
+        "longitude": 51.3673,
+        "timestamp": TODAY,
+        "severity": "critical",
+        "description": "TEST - EXACTLY ON PATH: IED detonated on the direct route to ICRC Field Hospital. Road completely blocked. Do not use this route.",
+    },
+    {
+        "event_id": "MOCK_IR_PATH_002",
+        "source": "ACLED",
+        "event_type": "Battles",
+        "country": "Iran",
+        "region": "Tehran",
+        "latitude": 35.7265,
+        "longitude": 51.3711,
+        "timestamp": TODAY,
+        "severity": "high",
+        "description": "TEST - 0.4KM FROM PATH: Armed skirmish 400 meters east of the route to ICRC Field Hospital. Stray fire risk.",
+    },
 ]
 
 
@@ -113,7 +139,7 @@ def insert_mock_data():
 
     for e in MOCK_EVENTS:
         cursor.execute("""
-            INSERT OR REPLACE INTO conflict_events
+            INSERT OR IGNORE INTO conflict_events
                 (event_id, source, event_type, country, region,
                  latitude, longitude, timestamp, fetched_at, severity, description, is_active)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)

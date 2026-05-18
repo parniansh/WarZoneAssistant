@@ -1,10 +1,10 @@
 import sqlite3
 import requests
 from pathlib import Path
-from datetime import datetime, timezone
 
 from Config import DB_PATH, OLLAMA_URL, OLLAMA_MODEL
 from Updater import haversine
+from PathConflict import get_path_conflict_context
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "systemPrompt.txt"
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -15,7 +15,6 @@ def load_system_prompt() -> str:
 
 
 def get_last_updated(country: str) -> str:
-    """Get the most recent successful fetch timestamp from fetch_log."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -29,7 +28,6 @@ def get_last_updated(country: str) -> str:
 
 
 def get_events_by_location(user_lat: float, user_lon: float, country: str) -> list:
-    """Pull events sorted by distance from user. Used for cases 1 and 2."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -49,22 +47,22 @@ def get_events_by_location(user_lat: float, user_lon: float, country: str) -> li
         events.append({
             "event_type": event_type,
             "region": region,
+            "latitude": lat,
+            "longitude": lon,
             "distance_km": round(dist, 1),
             "severity": severity,
             "description": desc,
             "timestamp": timestamp,
         })
-
     events.sort(key=lambda x: x["distance_km"])
     return events[:15]
 
 
 def get_events_by_severity(country: str) -> list:
-    """Pull 15 most severe country-wide events. Used for case 3 (no GPS)."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT event_type, region, severity, description, timestamp
+        SELECT event_type, region, latitude, longitude, severity, description, timestamp
         FROM conflict_events
         WHERE is_active = 1 AND country = ?
         ORDER BY timestamp DESC
@@ -75,99 +73,193 @@ def get_events_by_severity(country: str) -> list:
 
     events = []
     for row in rows:
-        event_type, region, severity, desc, timestamp = row
+        event_type, region, lat, lon, severity, desc, timestamp = row
         events.append({
             "event_type": event_type,
             "region": region,
+            "latitude": lat,
+            "longitude": lon,
             "severity": severity,
             "description": desc,
             "timestamp": timestamp,
         })
-
     events.sort(key=lambda x: SEVERITY_ORDER.get(x["severity"], 99))
     return events[:15]
 
 
-def build_context(events: list, warning: str = "") -> str:
-    """Format conflict events into a context string for the prompt."""
+def get_resources_by_location(user_lat: float, user_lon: float, country: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT osm_id, resource_type, name, region, latitude, longitude, address, phone
+        FROM static_resources WHERE country = ?
+    """, (country,))
+    static_rows = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT resource_id, resource_type, name, region, latitude, longitude, description
+        FROM dynamic_resources WHERE country = ? AND is_active = 1
+    """, (country,))
+    dynamic_rows = cursor.fetchall()
+    conn.close()
+
+    resources = []
+    for row in static_rows:
+        osm_id, rtype, name, region, lat, lon, address, phone = row
+        dist = haversine(user_lat, user_lon, lat, lon)
+        resources.append({
+            "name": name, "type": rtype, "region": region,
+            "latitude": lat, "longitude": lon,
+            "distance_km": round(dist, 1), "detail": address or "",
+            "phone": phone or "", "source": "permanent",
+        })
+
+    for row in dynamic_rows:
+        rid, rtype, name, region, lat, lon, desc = row
+        dist = haversine(user_lat, user_lon, lat, lon)
+        resources.append({
+            "name": name, "type": rtype, "region": region,
+            "latitude": lat, "longitude": lon,
+            "distance_km": round(dist, 1), "detail": desc or "",
+            "phone": "", "source": "wartime",
+        })
+
+    resources.sort(key=lambda x: x["distance_km"])
+    return resources[:15]
+
+
+def get_resources_by_country(country: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT resource_type, name, region, latitude, longitude, description
+        FROM dynamic_resources WHERE country = ? AND is_active = 1 LIMIT 10
+    """, (country,))
+    dynamic_rows = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT resource_type, name, region, latitude, longitude, address
+        FROM static_resources WHERE country = ? LIMIT 15
+    """, (country,))
+    static_rows = cursor.fetchall()
+    conn.close()
+
+    resources = []
+    for row in dynamic_rows:
+        rtype, name, region, lat, lon, desc = row
+        resources.append({"name": name, "type": rtype, "region": region, "latitude": lat, "longitude": lon, "detail": desc, "source": "wartime"})
+    for row in static_rows:
+        rtype, name, region, lat, lon, address = row
+        resources.append({"name": name, "type": rtype, "region": region, "latitude": lat, "longitude": lon, "detail": address or "", "source": "permanent"})
+    return resources
+
+
+def build_conflict_context(events: list) -> str:
     if not events:
-        return "No conflict events found in the database."
-
-    lines = []
-    if warning:
-        lines.append(f"⚠️ {warning}\n")
-    lines.append("Conflict events:\n")
-
+        return ""
+    lines = ["CONFLICTS:"]
     for e in events:
-        location = f"{e['distance_km']} km away" if "distance_km" in e else e["region"]
-        lines.append(
-            f"- [{e['severity'].upper()}] {e['event_type']} in {e['region']} "
-            f"({location}, {e['timestamp']}): {e['description']}"
-        )
+        dist = f"{e['distance_km']}km" if "distance_km" in e else e["region"]
+        desc = (e["description"] or "")[:80]
+        lines.append(f"[{e['severity'].upper()}] {e['event_type']} {dist} ({e['latitude']},{e['longitude']}): {desc}")
+    return "\n".join(lines)
+
+
+def build_resource_context(resources: list) -> str:
+    if not resources:
+        return ""
+    lines = ["RESOURCES:"]
+    for r in resources:
+        dist = f"{r['distance_km']}km" if "distance_km" in r else r["region"]
+        tag = "WAR" if r["source"] == "wartime" else "PERM"
+        detail = (r["detail"] or "")[:60]
+        lines.append(f"[{tag}] {r['name']} ({r['type']}) {dist} ({r['latitude']},{r['longitude']}): {detail}")
     return "\n".join(lines)
 
 
 def query_gemma(user_query: str, user_lat: float = None, user_lon: float = None,
-                country: str = None, has_internet: bool = True) -> str:
-    """Send a query to Gemma via Ollama with conflict context injected."""
+                country: str = None, has_internet: bool = True) -> tuple:
+    """Send query to Gemma. Returns (chat_text, warning)."""
     system_prompt = load_system_prompt()
-    context = ""
     warning = ""
+    conflict_context = ""
+    resource_context = ""
+    path_conflict_context = ""
 
     if country:
         has_gps = user_lat is not None and user_lon is not None
 
         if has_gps and has_internet:
-            # Case 1: GPS + internet — closest events, no warning
             events = get_events_by_location(user_lat, user_lon, country)
-            context = build_context(events)
+            resources = get_resources_by_location(user_lat, user_lon, country)
+            conflict_context = build_conflict_context(events)
+            resource_context = build_resource_context(resources)
+            path_conflict_context = get_path_conflict_context(user_lat, user_lon, resources, events)
 
         elif has_gps and not has_internet:
-            # Case 2: GPS + no internet — closest events from stale db, warn
             last_updated = get_last_updated(country)
             warning = f"No internet connection. Showing last known data. Last updated: {last_updated}"
             events = get_events_by_location(user_lat, user_lon, country)
-            context = build_context(events)
+            resources = get_resources_by_location(user_lat, user_lon, country)
+            conflict_context = build_conflict_context(events)
+            resource_context = build_resource_context(resources)
+            path_conflict_context = get_path_conflict_context(user_lat, user_lon, resources, events)
+            if path_conflict_context:
+                path_conflict_context = "[PATH DATA MAY BE OUTDATED]" + path_conflict_context
 
         elif not has_gps and has_internet:
-            # Case 3: No GPS + internet — most severe country-wide events, warn
-            warning = f"Location unavailable. Showing highest severity events for {country}."
+            warning = f"Location unavailable. Showing data for {country}."
             events = get_events_by_severity(country)
-            context = build_context(events)
+            resources = get_resources_by_country(country)
+            conflict_context = build_conflict_context(events)
+            resource_context = build_resource_context(resources)
+            path_conflict_context = ""
 
-    # Compose full prompt
+    context_parts = [c for c in [conflict_context, resource_context, path_conflict_context] if c]
+    full_context = "\n\n".join(context_parts)
+
     full_prompt = user_query
-    if context:
-        full_prompt = f"[CONFLICT DATA]\n{context}\n\n[USER QUERY]\n{user_query}"
+    if full_context:
+        full_prompt = f"{full_context}\n\n[USER QUERY]\n{user_query}"
+    print(full_prompt)
     payload = {
         "model": OLLAMA_MODEL,
         "system": system_prompt,
         "prompt": full_prompt,
         "stream": False,
-        "think": True
     }
 
     try:
-        response = requests.post(OLLAMA_URL, json=payload, timeout=220)
+        response = requests.post(OLLAMA_URL, json=payload, headers={"ngrok-skip-browser-warning": "true"}, timeout=120)
         response.raise_for_status()
-        response_text = response.json().get("response", "No response from model.")
-        if warning:
-            return f"⚠️ {warning}\n\n{response_text}"
-        return response_text
-
+        chat_text = response.json().get("response", "No response from model.")
+        return chat_text, warning
     except Exception as e:
-        return f"Error communicating with Gemma: {e}"
+        return f"Error communicating with Gemma: {e}", warning
 
 
 if __name__ == "__main__":
-    # Quick test
-    reply = query_gemma(
-        user_query="Is it safe to move north right now?",
-        # user_query="میخوام به سمت شمال برم. امن هست؟",
-        user_lat=35.6892,
-        user_lon=51.3890,
-        country="Iran",
-        has_internet=False
+    import time
 
-    )
-    print(reply)
+    queries = [
+        "Is it safe to move north right now?",
+        "Where can I find water near me?",
+        "My friend is bleeding badly, what do I do?",
+    ]
+
+    for q in queries:
+        print(f"\nQuery: {q}")
+        start = time.time()
+        chat_text, warning = query_gemma(
+            user_query=q,
+            user_lat=35.6892,
+            user_lon=51.3890,
+            country="Iran"
+        )
+        elapsed = round(time.time() - start, 1)
+        if warning:
+            print(f"⚠️ {warning}")
+        print(f"Response ({elapsed}s):\n{chat_text}")
+        print("-" * 60)

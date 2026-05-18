@@ -29,5 +29,3 @@ LIMITS:
 - If you do not know something, say so clearly.
 - Do not speculate about political motivations or blame any party.
 - Do not provide information that could be used to cause harm.
-
-Treat all conflict data provided as current and accurate. Base your response strictly on it. Do not suggest checking other sources.
