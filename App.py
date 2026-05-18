@@ -8,6 +8,12 @@ import subprocess
 from Config import DB_PATH
 from Gemma import query_gemma
 
+from MockData import insert_mock_data
+from MockResources import insert_mock_resources
+
+insert_mock_data()
+insert_mock_resources()
+
 from utils.OllamaManager import ensure_ollama
 
 with st.spinner("Starting AI model..."):
