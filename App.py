@@ -8,18 +8,18 @@ import subprocess
 from Config import DB_PATH
 from Gemma import query_gemma
 
-# from utils.OllamaManager import ensure_ollama
-#
-# with st.spinner("Starting AI model..."):
-#     result = ensure_ollama()
-#     if result["status"] == "started":
-#         st.toast("Gemma 4 model started", icon="✅")
-#
-#
-# def stop_ollama():
-#     subprocess.run(["ollama", "stop", "gemma4:e2b"])
-#
-# atexit.register(stop_ollama)
+from utils.OllamaManager import ensure_ollama
+
+with st.spinner("Starting AI model..."):
+    result = ensure_ollama()
+    if result["status"] == "started":
+        st.toast("Gemma 4 model started", icon="✅")
+
+
+def stop_ollama():
+    subprocess.run(["ollama", "stop", "gemma4:e2b"])
+
+atexit.register(stop_ollama)
 
 st.set_page_config(
     page_title="WarZone Assistant",
