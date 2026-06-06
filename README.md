@@ -1,11 +1,11 @@
-**WARZONE ASSISTANT**
+**CONFLICT ZONE ASSISTANT**
 
 AI-Powered Civilian Survival Assistant
 Powered by Gemma 4 (fully offline) | Google Hackathon Submission
 
 **Project Overview**
 
-Warzone Assistant is an offline-first AI application designed to help civilians survive and navigate active conflict zones. It runs entirely on-device using Google's Gemma 4 language model via Ollama, requiring no internet connection for its core functionality.
+conflict zone Assistant is an offline-first AI application designed to help civilians survive and navigate active conflict zones. It runs entirely on-device using Google's Gemma 4 language model via Ollama, requiring no internet connection for its core functionality.
 The application addresses three critical survival needs that civilians face in conflict zones: immediate medical response, situational safety awareness, and finding essential resources like water, food, and shelter.
 
 **Problem Statement**
@@ -19,13 +19,13 @@ Civilians caught in conflict zones face life-threatening situations with limited
 
 **Solution**
 
-Warzone Assistant is a mobile-accessible web application that provides AI-driven, language-agnostic survival guidance. It operates in three functional modes:
+conflict zone Assistant is a mobile-accessible web application that provides AI-driven, language-agnostic survival guidance. It operates in three functional modes:
 Mode 1: First Aid
 Provides immediate, step-by-step first aid protocols following WHO Emergency Care and TCCC (Tactical Combat Casualty Care) guidelines. Covers trauma injuries, environmental emergencies, chemical/blast exposure, and psychological first aid. Gemma 4's extensive medical training knowledge is used directly and no pre-loaded data required.
 Mode 2: Safe Place Finding
 Aggregates real-time conflict event data from ACLED (Armed Conflict Location & Event Data) API and displays it on an interactive map. The system polls for updates every 10 minutes when online, stores data in a local SQLite database, and provides proximity-based danger alerts when conflict events are detected near the user's location.
 Mode 3: Resource Finding
-Helps users locate critical resources including hospitals, pharmacies, water distribution points, emergency shelters, field hospitals, and food aid distribution. Combines permanent location data from OpenStreetMap with dynamic wartime resource data from ReliefWeb's humanitarian API.
+Helps users locate critical resources including hospitals, pharmacies, water distribution points, emergency shelters, field hospitals, and food aid distribution. Combines permanent location data from OpenStreetMap with dynamic conflict time resource data from ReliefWeb's humanitarian API.
 
 **Key Features**
 
@@ -72,7 +72,7 @@ Gemma 4 Integration
 Gemma 4 is served locally via Ollama and called through its REST API. Each query includes:
 • A unified system prompt covering all three modes
 • Injected conflict events sorted by proximity to the user
-• Injected resource locations (permanent + wartime) sorted by proximity
+• Injected resource locations (permanent + conflict time) sorted by proximity
 • Path conflict warnings computed geometrically before sending to the model
 • User query in any language
 
@@ -99,5 +99,5 @@ GPS + No Internet Local db data with 'last updated' timestamp warning, path conf
 No GPS + Internet Country-wide highest severity events, 'location unavailable' warning shown to user
 
 Why This Matters
-According to UNHCR, over 120 million people were forcibly displaced in 2024. The majority of civilian casualties in conflict zones occur not from direct violence but from lack of access to medical care, clean water, and safe shelter. Warzone Assistant directly addresses this gap by putting AI-powered survival guidance in the hands of anyone with a smartphone, no internet, no language barriers, no technical knowledge required.
+According to UNHCR, over 120 million people were forcibly displaced in 2024. The majority of civilian casualties in conflict zones occur not from direct violence but from lack of access to medical care, clean water, and safe shelter. conflict zone Assistant directly addresses this gap by putting AI-powered survival guidance in the hands of anyone with a smartphone, no internet, no language barriers, no technical knowledge required.
 By combining Gemma 4's frontier AI capabilities with real-time humanitarian data and novel geometric safety analysis, this project demonstrates that on-device AI can have immediate, measurable humanitarian impact.
